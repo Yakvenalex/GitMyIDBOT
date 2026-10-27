@@ -2,7 +2,7 @@ import logging
 from aiogram.types import BotCommand, BotCommandScopeDefault
 from aiohttp import web
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
-from create_bot import bot, dp, BASE_URL, WEBHOOK_PATH, HOST, PORT, ADMIN_ID
+from create_bot import APP_VERSION, bot, dp, BASE_URL, WEBHOOK_PATH, WEBHOOK_SECRET, HOST, PORT, ADMIN_ID
 from utils.db import initialize_database
 from handlers.start import router as start_router
 from handlers.admin_panel import router as admin_router
@@ -11,7 +11,11 @@ from handlers.admin_panel import router as admin_router
 # Функция для установки командного меню для бота
 async def set_commands():
     # Создаем список команд, которые будут доступны пользователям
-    commands = [BotCommand(command='start', description='Старт')]
+    commands = [
+        BotCommand(command='start', description='Открыть меню'),
+        BotCommand(command='id', description='Узнать ID пользователя, чата или темы'),
+        BotCommand(command='help', description='Как пользоваться ботом'),
+    ]
     # Устанавливаем эти команды как дефолтные для всех пользователей
     await bot.set_my_commands(commands, BotCommandScopeDefault())
 
@@ -25,16 +29,30 @@ async def on_startup() -> None:
     await initialize_database()
 
     # Устанавливаем вебхук для приема сообщений через заданный URL
-    await bot.set_webhook(f"{BASE_URL}{WEBHOOK_PATH}")
+    await bot.set_webhook(
+        f"{BASE_URL}{WEBHOOK_PATH}",
+        secret_token=WEBHOOK_SECRET,
+        allowed_updates=dp.resolve_used_update_types(),
+    )
 
     # Отправляем сообщение администратору о том, что бот был запущен
-    await bot.send_message(chat_id=ADMIN_ID, text='Бот запущен!')
+    try:
+        await bot.send_message(chat_id=ADMIN_ID, text='Бот запущен!')
+    except Exception as error:
+        logging.getLogger(__name__).warning(
+            "Startup notification was not delivered: %s", error
+        )
 
 
 # Функция, которая будет вызвана при остановке бота
 async def on_shutdown() -> None:
     # Отправляем сообщение администратору о том, что бот был остановлен
-    await bot.send_message(chat_id=ADMIN_ID, text='Бот остановлен!')
+    try:
+        await bot.send_message(chat_id=ADMIN_ID, text='Бот остановлен!')
+    except Exception as error:
+        logging.getLogger(__name__).warning(
+            "Shutdown notification was not delivered: %s", error
+        )
     # Удаляем вебхук и, при необходимости, очищаем ожидающие обновления
     # await bot.delete_webhook(drop_pending_updates=True)
     # Закрываем сессию бота, освобождая ресурсы
@@ -44,8 +62,8 @@ async def on_shutdown() -> None:
 # Основная функция, которая запускает приложение
 def main() -> None:
     # Подключаем маршрутизатор (роутер) для обработки сообщений
-    dp.include_router(start_router)
     dp.include_router(admin_router)
+    dp.include_router(start_router)
 
     # Регистрируем функцию, которая будет вызвана при старте бота
     dp.startup.register(on_startup)
@@ -56,10 +74,16 @@ def main() -> None:
     # Создаем веб-приложение на базе aiohttp
     app = web.Application()
 
+    async def healthcheck(_: web.Request) -> web.Response:
+        return web.json_response({"status": "ok", "version": APP_VERSION})
+
+    app.router.add_get("/health", healthcheck)
+
     # Настраиваем обработчик запросов для работы с вебхуком
     webhook_requests_handler = SimpleRequestHandler(
         dispatcher=dp,  # Передаем диспетчер
-        bot=bot  # Передаем объект бота
+        bot=bot,  # Передаем объект бота
+        secret_token=WEBHOOK_SECRET,
     )
     # Регистрируем обработчик запросов на определенном пути
     webhook_requests_handler.register(app, path=WEBHOOK_PATH)

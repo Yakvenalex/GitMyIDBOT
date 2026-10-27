@@ -1,0 +1,19 @@
+[Unit]
+Description=Telegram Get ID Bot
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/home/GitMyIDBOT
+EnvironmentFile=/home/GitMyIDBOT/.env
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/home/GitMyIDBOT/.venv/bin/python /home/GitMyIDBOT/aiogram_run.py
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=20
+
+[Install]
+WantedBy=multi-user.target

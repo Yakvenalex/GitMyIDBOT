@@ -22,7 +22,9 @@ async def add_user(telegram_id: int, username: str, first_name: str):
         await db.execute("""
             INSERT INTO users (telegram_id, username, first_name)
             VALUES (?, ?, ?)
-            ON CONFLICT(telegram_id) DO NOTHING
+            ON CONFLICT(telegram_id) DO UPDATE SET
+                username = excluded.username,
+                first_name = excluded.first_name
         """, (telegram_id, username, first_name))
         await db.commit()
 

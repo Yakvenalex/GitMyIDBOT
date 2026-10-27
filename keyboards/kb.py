@@ -1,5 +1,7 @@
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButtonRequestUser, KeyboardButton, KeyboardButtonRequestChat, \
-    InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import (
+    CopyTextButton, InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton,
+    KeyboardButtonRequestChat, KeyboardButtonRequestUsers, ReplyKeyboardMarkup,
+)
 
 from create_bot import ADMIN_ID
 
@@ -18,16 +20,22 @@ def main_contact_kb(user_id: int):
         [
             KeyboardButton(
                 text="👤 USER ID",
-                request_user=KeyboardButtonRequestUser(
+                request_users=KeyboardButtonRequestUsers(
                     request_id=1,
-                    user_is_bot=False
+                    user_is_bot=False,
+                    max_quantity=1,
+                    request_name=True,
+                    request_username=True,
                 )
             ),
             KeyboardButton(
                 text="🤖 BOT ID",
-                request_user=KeyboardButtonRequestUser(
+                request_users=KeyboardButtonRequestUsers(
                     request_id=4,
-                    user_is_bot=True
+                    user_is_bot=True,
+                    max_quantity=1,
+                    request_name=True,
+                    request_username=True,
                 )
             )
         ],
@@ -36,15 +44,18 @@ def main_contact_kb(user_id: int):
                 text="👥 GROUP ID",
                 request_chat=KeyboardButtonRequestChat(
                     request_id=2,
-                    chat_is_channel=False,  # Включает только обычные группы (не каналы)
-                    chat_has_username=True
+                    chat_is_channel=False,
+                    request_title=True,
+                    request_username=True,
                 )
             ),
             KeyboardButton(
                 text="📢 CHANNEL ID",
                 request_chat=KeyboardButtonRequestChat(
                     request_id=3,
-                    chat_is_channel=True  # Включает только каналы
+                    chat_is_channel=True,
+                    request_title=True,
+                    request_username=True,
                 )
             )
         ],
@@ -70,6 +81,13 @@ def main_contact_kb(user_id: int):
     )
 
     return keyboard
+
+
+def copy_ids_kb(items: list[tuple[str, int]]) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=label, copy_text=CopyTextButton(text=str(identifier)))]
+        for label, identifier in items
+    ])
 
 
 def admin_kb():
