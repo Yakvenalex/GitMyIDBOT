@@ -224,6 +224,54 @@ class BotRoutingTests(unittest.IsolatedAsyncioTestCase):
         sent = await self.feed(user_id=10001, text="⚙️ АДМИНКА")
         self.assertIn("админку", sent.text)
 
+    async def admin_users_callback(self, users, *, user_id=10001):
+        with patch.object(self.admin, "get_all_users", AsyncMock(return_value=users)) as get_users:
+            await self.dispatcher.feed_update(self.bot, Update.model_validate({
+                "update_id": 3,
+                "callback_query": {
+                    "id": "users1", "chat_instance": "instance", "data": "admin_users",
+                    "from": {"id": user_id, "is_bot": False, "first_name": "Admin"},
+                    "message": {"message_id": 1, "date": 1700000000,
+                                "chat": {"id": user_id, "type": "private"}, "text": "Admin panel"},
+                },
+            }))
+            return get_users
+
+    async def test_admin_users_escapes_html_in_names(self):
+        await self.admin_users_callback([
+            {"telegram_id": 88801, "first_name": "</code><b>Alice & Bob</b>"},
+            {"telegram_id": 88802, "first_name": None},
+        ])
+        sent = self.session.sent[-1]
+        self.assertIn("<code>88801</code>", sent.text)
+        self.assertIn("&lt;/code&gt;&lt;b&gt;Alice &amp; Bob&lt;/b&gt;", sent.text)
+        self.assertNotIn("<b>Alice", sent.text)
+        self.assertIn("Без имени", sent.text)
+        self.assertIsNotNone(sent.reply_markup)
+
+    async def test_admin_users_large_list_is_split_without_losing_users(self):
+        users = [{"telegram_id": 90000 + i, "first_name": "😀<&>" * 16} for i in range(200)]
+        await self.admin_users_callback(users)
+        self.assertGreater(len(self.session.sent), 1)
+        combined = "\n".join(sent.text for sent in self.session.sent)
+        for user in users:
+            self.assertEqual(combined.count(f'<code>{user["telegram_id"]}</code>'), 1)
+        for sent in self.session.sent:
+            self.assertLessEqual(len(sent.text.encode("utf-16-le")) // 2, 3500)
+            self.assertEqual(sent.text.count("<code>"), sent.text.count("</code>"))
+        self.assertTrue(all(sent.reply_markup is None for sent in self.session.sent[:-1]))
+        self.assertIsNotNone(self.session.sent[-1].reply_markup)
+
+    async def test_admin_users_empty_list(self):
+        await self.admin_users_callback([])
+        self.assertEqual(len(self.session.sent), 1)
+        self.assertIn("пользователей: 0", self.session.sent[0].text)
+
+    async def test_admin_users_remains_admin_only(self):
+        get_users = await self.admin_users_callback([], user_id=10002)
+        get_users.assert_not_awaited()
+        self.assertFalse(self.session.sent)
+
     async def test_forwarded_broadcast_draft_is_not_swallowed(self):
         state = self.dispatcher.fsm.get_context(bot=self.bot, chat_id=10001, user_id=10001)
         await state.set_state(self.admin.Form.start_broadcast)

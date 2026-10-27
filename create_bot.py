@@ -5,7 +5,7 @@ from decouple import config
 from aiogram.fsm.storage.memory import MemoryStorage
 
 # переменные для работы
-APP_VERSION = "1.1.0"
+APP_VERSION = "1.1.1"
 ADMIN_ID = int(config('ADMIN_ID'))
 BOT_TOKEN = config("BOT_TOKEN")
 HOST = config("HOST", default="127.0.0.1")

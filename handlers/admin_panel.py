@@ -1,3 +1,5 @@
+from html import escape
+
 from aiogram import Router, F
 from aiogram.enums import ContentType
 from aiogram.fsm.context import FSMContext
@@ -15,6 +17,22 @@ class Form(StatesGroup):
     start_broadcast = State()
 
 
+def user_list_messages(users_data: list[dict]) -> list[str]:
+    """Escape names and keep each message below Telegram's text limit."""
+    messages = []
+    text = f'В базе пользователей: {len(users_data)}.\n\n'
+    for user in users_data:
+        name = escape(user.get('first_name') or 'Без имени')
+        line = f'<code>{user["telegram_id"]}</code> — {name}\n'
+        # Count UTF-16 units too, so emoji-heavy names cannot overflow the limit.
+        if len((text + line).encode('utf-16-le')) // 2 > 3500:
+            messages.append(text)
+            text = 'Пользователи (продолжение):\n\n'
+        text += line
+    messages.append(text)
+    return messages
+
+
 @router.message((F.from_user.id == ADMIN_ID) & (F.text == '⚙️ АДМИНКА'))
 async def admin_handler(message: Message):
     await message.answer('Вам открыт доступ в админку! Выберите действие👇', reply_markup=admin_kb())
@@ -25,12 +43,11 @@ async def admin_users_handler(call: CallbackQuery):
     await call.answer('Готовлю список пользователей')
     users_data = await get_all_users()
 
-    text = f'В базе данных {len(users_data)}. Вот информация по ним:\n\n'
-
-    for user in users_data:
-        text += f'<code>{user["telegram_id"]} - {user["first_name"]}</code>\n'
-
-    await call.message.answer(text, reply_markup=admin_kb())
+    messages = user_list_messages(users_data)
+    for index, text in enumerate(messages):
+        await call.message.answer(
+            text, reply_markup=admin_kb() if index == len(messages) - 1 else None,
+        )
 
 
 @router.callback_query((F.from_user.id == ADMIN_ID) & (F.data == 'admin_broadcast'))
